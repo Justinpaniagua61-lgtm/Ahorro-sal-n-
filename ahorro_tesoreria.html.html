@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Ahorro del Salón</title>
+
+<!-- iOS PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Ahorro Salon">
+<link rel="apple-touch-icon" href="icon.png">
+
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,Arial;background:#f2f4f8;margin:0}
+.login,.app{max-width:100%;padding:16px}
+.login-box{background:#fff;padding:24px;border-radius:16px;margin-top:25vh;box-shadow:0 10px 25px rgba(0,0,0,.15)}
+input,select,button{width:100%;padding:14px;margin:8px 0;font-size:16px;border-radius:12px;border:1px solid #d1d5db}
+button{background:#2563eb;color:#fff;border:none;font-weight:600}
+button:active{transform:scale(.98)}
+.error{background:#b91c1c;color:#fff;height:100vh}
+.student{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+.student input[type=text]{flex:2}
+.student select{flex:1}
+.student input[type=checkbox]{flex:.4;transform:scale(1.3)}
+h2{margin-top:24px;font-size:20px}
+.table{background:#fff;padding:14px;border-radius:14px;margin-top:16px}
+footer{text-align:center;margin:30px 0;color:#6b7280;font-weight:bold;font-size:14px}
+canvas{width:100%;height:200px}
+</style>
+</head>
+<body>
+
+<div id="login" class="login">
+ <div class="login-box">
+  <h2>Ingreso</h2>
+  <input id="user" placeholder="Usuario">
+  <input id="pin" placeholder="PIN de 5 dígitos" type="password" inputmode="numeric">
+  <button onclick="login()">Entrar</button>
+ </div>
+</div>
+
+<div id="app" class="app" style="display:none;">
+ <h2>Fecha de la sesión</h2>
+ <input type="date" id="fecha">
+
+ <h2>Valor fijo (opcional)</h2>
+ <input type="number" step="0.01" id="valorFijo" placeholder="Ejemplo: 0.25" inputmode="decimal">
+
+ <h2>Registro de ahorro</h2>
+ <div id="lista"></div>
+ <button onclick="guardarSesion()">Guardar sesión</button>
+
+ <h2>Totales semanales</h2>
+ <div class="table" id="semanal"></div>
+
+ <h2>Total mensual del grupo</h2>
+ <div class="table" id="mensual"></div>
+</div>
+
+<footer>HECHO POR JUSTIN</footer>
+
+<script>
+const USUARIO="COMITESOCIAL";
+const PIN="10111";
+
+const estudiantes=["GENESIS VERONICA","PAOLA EUNICE","RUTH NOEMI","ANDERSON STIVEN","LEONEL ALEXANDER","JUSTIN DANIEL PANIAGUA TREJO","BRYAN DANIEL","MELISSA","SALVADOR ALEJANDRO","RAFAEL ALEJANDRO","YEINI JULISSA","GABRIELA","CRISTIAN","ANDERSON","LARISSA","YOLANDA","BRYAN","LESLIE MARICELA SERPAS VASQUES","JOSUE","MARIO","JOSUE","VALERIA","MARIO JOSUE","LUCIA GUADALUPE","JONATHAN","ALLISON","CARLOS ERNESTO","ANDREA"];
+
+function login(){
+ if(user.value===USUARIO && pin.value===PIN){
+  login.style.display='none';
+  app.style.display='block';
+  cargarLista();
+  calcularTotales();
+ } else {
+  document.body.className='error';
+ }
+}
+
+function cargarLista(){
+ lista.innerHTML='';
+ estudiantes.forEach(n=>{
+  lista.innerHTML+=`<div class='student'>
+   <input type='text' value='${n}'>
+   <select>
+    <option value=''>Monto</option>
+    <option value='0.25'>$0.25</option>
+    <option value='0.30'>$0.30</option>
+    <option value='0.40'>$0.40</option>
+    <option value='0.50'>$0.50</option>
+    <option value='1.00'>$1.00</option>
+   </select>
+   <input type='checkbox'>
+  </div>`;
+ });
+}
+
+function guardarSesion(){
+ if(!fecha.value){alert('Seleccione una fecha');return;}
+ const datos={fecha:fecha.value,registros:[]};
+ document.querySelectorAll('.student').forEach(e=>{
+  let nombre=e.children[0].value.trim();
+  let checked=e.children[2].checked;
+  let monto=parseFloat(e.children[1].value)||parseFloat(valorFijo.value);
+  if(checked && !isNaN(monto)) datos.registros.push({nombre,monto});
+ });
+ localStorage.setItem('ahorro_'+fecha.value,JSON.stringify(datos));
+ alert('Guardado correctamente');
+ calcularTotales();
+}
+
+function calcularTotales(){
+ let keys=Object.keys(localStorage).filter(k=>k.startsWith('ahorro_')).sort();
+ let semanas={}; let total=0;
+ keys.forEach((k,i)=>{
+  let s='Semana '+(i+1);
+  semanas[s]=semanas[s]||{};
+  JSON.parse(localStorage[k]).registros.forEach(r=>{
+   semanas[s][r.nombre]=(semanas[s][r.nombre]||0)+r.monto;
+   total+=r.monto;
+  });
+ });
+ let html='';
+ for(let s in semanas){
+  html+=`<b>${s}</b><br>`;
+  for(let n in semanas[s]) html+=`${n}: $${semanas[s][n].toFixed(2)}<br>`;
+  html+='<br>';
+ }
+ semanal.innerHTML=html||'Sin datos';
+ mensual.innerHTML=`TOTAL: $${total.toFixed(2)}<canvas id='grafica'></canvas>`;
+ dibujarGrafica(semanas);
+}
+
+function dibujarGrafica(semanas){
+ const c=document.getElementById('grafica'); if(!c) return;
+ c.width=350; c.height=200; const x=c.getContext('2d');
+ x.clearRect(0,0,350,200);
+ Object.keys(semanas).forEach((s,i)=>{
+  let t=Object.values(semanas[s]).reduce((a,b)=>a+b,0);
+  let h=t*20;
+  x.fillStyle='#2563eb';
+  x.fillRect(30+i*70,180-h,40,h);
+  x.fillText(s,25+i*70,195);
+ });
+}
+
+if('serviceWorker'in navigator){navigator.serviceWorker.register('service-worker.js');}
+</script>
+</body>
+</html>
